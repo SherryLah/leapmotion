@@ -1,0 +1,947 @@
+#include "LeapMotion.h"
+
+//using namespace Leap;
+
+void SampleListener::onInit(const Controller& controller) {
+  std::cout << "Initialized" << std::endl;
+}
+
+void SampleListener::onConnect(const Controller& controller) {
+  std::cout << "Connected" << std::endl;
+}
+
+void SampleListener::onDisconnect(const Controller& controller) {
+  // Note: not dispatched when running in a debugger.
+  std::cout << "Disconnected" << std::endl;
+}
+
+void SampleListener::onExit(const Controller& controller) {
+  std::cout << "Exited" << std::endl;
+}
+
+//void SampleListener::onFrame(const Controller& controller) 
+//{
+//	// Get the most recent frame and report some basic information
+//	const Frame frame = controller.frame();
+//	std::cout << "Frame id: " << frame.id()
+//			<< ", timestamp: " << frame.timestamp()
+//			<< ", hands: " << frame.hands().count()
+//			<< ", extended fingers: " << frame.fingers().extended().count() << std::endl;
+//
+//	HandList hands = frame.hands();
+//	for (HandList::const_iterator hl = hands.begin(); hl != hands.end(); ++hl)
+//	{
+//		// Get the first hand
+//		const Hand hand = *hl;
+//		std::string handType = hand.isLeft() ? "Left hand" : "Right hand";
+//		std::cout << std::string(2, ' ') << handType << ", id: " << hand.id()
+//					<< ", palm position: " << hand.palmPosition() << std::endl;
+//		// Get the hand's normal vector and direction
+//		const Vector normal = hand.palmNormal();
+//		const Vector direction = hand.direction();
+//
+//		// Calculate the hand's pitch, roll, and yaw angles
+//		std::cout << std::string(2, ' ') <<  "pitch: " << direction.pitch() * RAD_TO_DEG << " degrees, "
+//					<< "roll: " << normal.roll() * RAD_TO_DEG << " degrees, "
+//					<< "yaw: " << direction.yaw() * RAD_TO_DEG << " degrees" << std::endl;
+//
+//		// Get fingers
+//		const FingerList fingers = hand.fingers();
+//		for (FingerList::const_iterator fl = fingers.begin(); fl != fingers.end(); ++fl)
+//		{
+//			const Finger finger = *fl;
+//		//  std::cout << std::string(4, ' ') <<  fingerNames[finger.type()]
+//					// << " finger, id: " << finger.id()
+//					// << ", length: " << finger.length()
+//					// << "mm, width: " << finger.width() << std::endl;
+//		}
+//	}
+//
+//	if (!frame.hands().isEmpty()) 
+//	{
+//		std::cout << std::endl;
+//	}
+//
+//}
+
+void SampleListener::onFocusGained(const Controller& controller) {
+  //std::cout << "Focus Gained" << std::endl;
+}
+
+void SampleListener::onFocusLost(const Controller& controller) {
+  //std::cout << "Focus Lost" << std::endl;
+}
+
+void SampleListener::onDeviceChange(const Controller& controller) {
+  //std::cout << "Device Changed" << std::endl;
+  const DeviceList devices = controller.devices();
+
+  for (int i = 0; i < devices.count(); ++i) {
+    //std::cout << "id: " << devices[i].toString() << std::endl;
+    //std::cout << "  isStreaming: " << (devices[i].isStreaming() ? "true" : "false") << std::endl;
+    //std::cout << "  isSmudged:" << (devices[i].isSmudged() ? "true" : "false") << std::endl;
+    //std::cout << "  isLightingBad:" << (devices[i].isLightingBad() ? "true" : "false") << std::endl;
+  }
+}
+
+void SampleListener::onServiceConnect(const Controller& controller) {
+  //std::cout << "Service Connected" << std::endl;
+}
+
+void SampleListener::onServiceDisconnect(const Controller& controller) {
+  //std::cout << "Service Disconnected" << std::endl;
+}
+
+void SampleListener::onServiceChange(const Controller& controller) {
+  //std::cout << "Service Changed" << std::endl;
+}
+
+void SampleListener::onDeviceFailure(const Controller& controller) {
+  //std::cout << "Device Error" << std::endl;
+  const Leap::FailedDeviceList devices = controller.failedDevices();
+
+  for (FailedDeviceList::const_iterator dl = devices.begin(); dl != devices.end(); ++dl) {
+    const FailedDevice device = *dl;
+    //std::cout << "  PNP ID:" << device.pnpId();
+    //std::cout << "    Failure type:" << device.failure();
+  }
+}
+
+void SampleListener::onLogMessage(const Controller&, MessageSeverity s, int64_t t, const char* msg) {
+  switch (s) {
+  case Leap::MESSAGE_CRITICAL:
+    //std::cout << "[Critical]";
+    break;
+  case Leap::MESSAGE_WARNING:
+    //std::cout << "[Warning]";
+    break;
+  case Leap::MESSAGE_INFORMATION:
+    //std::cout << "[Info]";
+    break;
+  case Leap::MESSAGE_UNKNOWN:
+    //std::cout << "[Unknown]";
+	  break;
+  }
+  //std::cout << "[" << t << "] ";
+  //std::cout << msg << std::endl;
+}
+
+class HE_vert;
+class HE_face;
+class HE_edge;
+
+
+class myVector
+{
+public:
+	float x;
+	float y;
+	float z;
+};
+
+class Faces
+{
+public:
+	int index;
+	int V_index1;
+	int V_index2;
+	int V_index3;
+};
+
+class UniformScale
+{
+public:
+	float Max_x;
+	float Max_y;
+	float Max_z;
+	float Min_x;
+	float Min_y;
+	float Min_z;
+	float scale;
+};
+
+class HE_edge
+{
+public:
+	int index;
+	HE_vert* vert;   // vertex at the end of the half-edge  
+	HE_edge* pair;   // oppositely oriented half-edge   
+	HE_face* face;   // the incident face  
+	HE_edge* prev;   // previous half-edge around the face  
+	HE_edge* next;   // next half-edge around the face
+};
+
+class HE_vert
+{  
+public:
+	int index;
+	float x;
+	float y;
+	float z;   // the vertex coordinates  
+	HE_edge* edge;   // one of the half-edges emanating from the vertex 
+	myVector vn;
+}; 
+
+class HE_face 
+{ 
+public:
+	HE_edge* edge;   // one of the half-edges bordering the face 
+}; 
+
+int option = 0;
+
+#include <stdlib.h>
+#include <stdio.h>
+#include <math.h>  
+#include <GL/freeglut.h>   
+#include <glui.h>
+#include <fstream>
+#include <iostream>
+//#include <Leap.h>
+#include "Model.h"
+#include "LeapMotion.h"
+
+using namespace std;
+
+#define TRANSFORM_NONE    0 
+#define TRANSFORM_ROTATE  1
+#define TRANSFORM_TRANS   2 
+#define TRANSFORM_SCALE   3 
+#define MIN_SCALE 0.2
+#define MAX_SCALE 2
+ 
+void Display();
+float getScale();
+//Menu answer
+void ResetModelPosition();
+void Light0();
+void Light1();
+void Half_Edge();
+void ComputeVn();
+
+   
+//read file for .m
+int numVertices;
+int numFaces;
+//store index & coordinations of vertex
+//Vertices* VerticesArray; 
+HE_vert* VertList;
+HE_edge *EdgeList;
+HE_face *FaceList;
+Faces* FacesArray; 
+//temp list for find pair
+HE_edge*** isPair;
+
+//camera control
+static float x_angle = 0.0; 
+static float y_angle = 0.0; 
+static float z_trans = 0.0;
+static float scale_size = 1; 
+static float x_trans = 0.0;
+static float y_trans = 0.0;
+
+float deltaT = 0.001;
+
+int width,height;
+
+//get uniform scale
+UniformScale Scale;
+string name[2] = {"testModel/bunny.m","testModel/gargoyle.m"};
+bool isReading = false;
+
+// Read .m file
+void ReadFile(string filename)
+{
+	numVertices = 0;
+	numFaces = 0;
+
+	ifstream data;
+	data.open(filename); 
+	if (!data)
+	{
+		cout<<"Error: can not open this file!";
+		exit(1);
+	}
+	//count num of vertices & faces
+	string buf;    
+	while( data >> buf )   
+	{      
+		if (buf == "Vertex")
+		{
+			numVertices++;
+		}
+		else if (buf == "Face")
+		{
+			numFaces++;
+		}
+	} 
+	data.close();
+	data.clear(ios::goodbit); 
+
+	VertList = new HE_vert[numVertices];
+	FacesArray =  new Faces[numFaces];
+
+	//read other info
+	data.open(filename);
+	//index of VerticesArray
+	int i = 0;
+	//index of FacesArray
+	int j = 0;
+	while ( data >> buf)
+	{
+		if (buf == "Vertex")
+		{
+			data >> VertList[i].index;
+			data >> VertList[i].x;
+			data >> VertList[i].y;
+			data >> VertList[i].z;
+			i++;
+		}
+		else if (buf == "Face")
+		{
+			data >> FacesArray[j].index;
+			data >> FacesArray[j].V_index1;
+			data >> FacesArray[j].V_index2;
+			data >> FacesArray[j].V_index3;
+			j++;
+		}
+	}
+	data.close();
+
+	//half-edge structure
+	EdgeList = new HE_edge[numFaces*3];
+	for(int i=0; i<3*numFaces; i++)
+	{
+		EdgeList[i].pair = 0;
+	}
+	FaceList = new HE_face[numFaces];
+	isPair = new HE_edge**[numVertices];
+	for (int i= 0; i<numVertices;i++)
+	{
+		isPair[i] = new HE_edge*[50];  //assume the edges connect to one point is not more than 20
+	}
+	for (int i= 0; i<numVertices;i++)
+	{
+		for (int j= 0; j<50;j++)
+		{
+			isPair[i][j]= NULL;
+		}
+	}
+	Half_Edge();
+	ComputeVn();
+	getScale();
+	ResetModelPosition();
+	isReading = false;
+}
+
+float getScale()
+{
+	Scale.Max_x = Scale.Min_x = VertList[0].x;
+	Scale.Max_y = Scale.Min_y = VertList[0].y;
+	Scale.Max_z = Scale.Min_z = VertList[0].z;
+	//Scale.Max_x = 0;
+	// get Max_x Max_y Max_z
+	for (int i = 0; i < numVertices; i++)
+	{
+		if( VertList[i].x > Scale.Max_x )
+		{
+			Scale.Max_x = VertList[i].x;
+		}
+		else if ( VertList[i].x < Scale.Min_x )
+		{
+			Scale.Min_x = VertList[i].x;
+		}
+
+		if( VertList[i].y > Scale.Max_y )
+		{
+			Scale.Max_y = VertList[i].y;
+		}
+		else if ( VertList[i].y < Scale.Min_y )
+		{
+			Scale.Min_y = VertList[i].y;
+		}
+
+		if( VertList[i].z > Scale.Max_z )
+		{
+			Scale.Max_z = VertList[i].z;
+		}
+		else if ( VertList[i].z < Scale.Min_z )
+		{
+			Scale.Min_z = VertList[i].z;
+		}
+	}
+
+	Scale.scale = (float)(3 / (Scale.Max_x - Scale.Min_x));
+
+	return Scale.scale;
+}
+
+//draw object
+void DrawObject()
+{
+	glPolygonMode(GL_FRONT,GL_FILL);
+	glShadeModel(GL_SMOOTH);
+
+	glPushMatrix();
+		//make models size uniform and drawn at origin point
+		glScalef(Scale.scale, Scale.scale, Scale.scale);
+		glTranslated(-(Scale.Max_x + Scale.Min_x)/2 , -(Scale.Max_y + Scale.Min_y)/2 ,-(Scale.Max_z + Scale.Min_z)/2);
+		for (int i = 0; i < numFaces; i++)
+		{
+			glBegin(GL_TRIANGLES);
+				glColor3f(0.5, 0.3, 0.2);
+
+				glNormal3f(-VertList[FacesArray[i].V_index1-1].vn.x, -VertList[FacesArray[i].V_index1-1].vn.y,-VertList[FacesArray[i].V_index1-1].vn.z);
+				glVertex3f( VertList[FacesArray[i].V_index1-1].x, VertList[FacesArray[i].V_index1-1].y, VertList[FacesArray[i].V_index1-1].z);
+
+				glNormal3f(-VertList[FacesArray[i].V_index2-1].vn.x, -VertList[FacesArray[i].V_index2-1].vn.y,-VertList[FacesArray[i].V_index2-1].vn.z);
+				glVertex3f( VertList[FacesArray[i].V_index2-1].x, VertList[FacesArray[i].V_index2-1].y, VertList[FacesArray[i].V_index2-1].z);
+		
+				glNormal3f(-VertList[FacesArray[i].V_index3-1].vn.x, -VertList[FacesArray[i].V_index3-1].vn.y,-VertList[FacesArray[i].V_index3-1].vn.z);
+				glVertex3f( VertList[FacesArray[i].V_index3-1].x, VertList[FacesArray[i].V_index3-1].y, VertList[FacesArray[i].V_index3-1].z);
+			glEnd();
+		}
+	glPopMatrix(); 
+}
+//draw axis ground & bounding box
+void DrawBasic(float Max_x, float Min_x, float Max_y, float Min_y, float Max_z, float Min_z, float Scale)
+{
+	glPolygonMode(GL_FRONT,GL_FILL);
+	//axis
+	//x
+	glPushMatrix();
+		glPushMatrix();
+			glColor3f(1.0f, 0.0f, 0.0f);
+			glRotatef(90,0.0,1.0,0.0);
+			glutSolidCylinder(0.02,2.0,20,20);
+		glPopMatrix();
+		glTranslatef(2.0,0.0,0.0);
+		glRotatef(90,0.0,1.0,0.0);
+		glutSolidCone(0.04,0.3,20,20);
+	glPopMatrix();
+	//y
+	glPushMatrix();
+		glPushMatrix();
+			glColor3f(0.0f, 1.0f, 0.0f);
+			glRotatef(-90,1.0,0.0,0.0);
+			glutSolidCylinder(0.02,2.0,20,20);
+		glPopMatrix();
+		glTranslatef(0.0,2.0,0.0);
+		glRotatef(-90,1.0,0.0,0.0);
+		glutSolidCone(0.04,0.3,20,20);
+	glPopMatrix();
+	//z
+	glPushMatrix();
+		glPushMatrix();
+			glColor3f(0.0f, 0.0f, 1.0f);
+			glutSolidCylinder(0.02,2.0,20,20);
+		glPopMatrix();
+		glTranslatef(0.0f, 0.0f, 2.0f);
+		glutSolidCone(0.04,0.3,20,20);
+	glPopMatrix();
+	
+	//ground
+	
+	float i = -5.0;
+	while (i <= 5.0)
+	{
+		glBegin(GL_LINES);
+			//parallel to x
+			glColor3f(0.0f, 0.0f, 0.0f);
+			glVertex3f(-5.0f, 0.0f, i);
+			glVertex3f(5.0f, 0.0f, i);
+			//parallel to y
+			glColor3f(0.0f, 0.0f, 0.0f);
+			glVertex3f(i, 0.0f, -5.0f);
+			glVertex3f(i, 0.0f, 5.0f);
+		glEnd();
+		i += 0.5;
+	}
+}
+
+void Half_Edge()
+{
+	//edge->vertex
+	int j = -1;
+	for (int i = 0; i < numFaces; i++)
+	{
+		//store verts of edges
+		j++;
+		//EdgeList[j].index = j; 
+		EdgeList[j].vert = &VertList[FacesArray[i].V_index1-1];
+		VertList[FacesArray[i].V_index1-1].edge = &EdgeList[j]; 
+		//store faces of edges
+		EdgeList[j].face = &FaceList[i];
+		FaceList[i].edge = &EdgeList[j];
+		//find pair
+		for (int p = 0; p < 50; p++)
+		{
+			if (isPair[FacesArray[i].V_index2-1][p] == NULL)
+			{
+				isPair[FacesArray[i].V_index2-1][p] = &EdgeList[j];
+				break;
+			}
+		}
+		for (int q = 0; q < 50; q++)
+		{
+			if (isPair[FacesArray[i].V_index1-1][q] != NULL)
+			{
+				if (isPair[FacesArray[i].V_index1-1][q]->vert == &VertList[FacesArray[i].V_index2-1])
+				{
+					isPair[FacesArray[i].V_index1-1][q]->pair = &EdgeList[j];
+					EdgeList[j].pair = isPair[FacesArray[i].V_index1-1][q];
+					break;
+				}
+			}
+			else
+			{
+				break;
+			}
+		}
+
+		j++;
+		//EdgeList[j].index = j; 
+		EdgeList[j].vert = &VertList[FacesArray[i].V_index2-1];
+		VertList[FacesArray[i].V_index2-1].edge = &EdgeList[j]; 
+		//find pair
+		for (int p = 0; p < 50; p++)
+		{
+			if (isPair[FacesArray[i].V_index3-1][p] == NULL)
+			{
+				isPair[FacesArray[i].V_index3-1][p] = &EdgeList[j];
+				break;
+			}
+		}
+		for (int q = 0; q < 50; q++)
+		{
+			if (isPair[FacesArray[i].V_index2-1][q] != NULL)
+			{
+				if (isPair[FacesArray[i].V_index2-1][q]->vert == &VertList[FacesArray[i].V_index3-1])
+				{
+					isPair[FacesArray[i].V_index2-1][q]->pair = &EdgeList[j];
+					EdgeList[j].pair = isPair[FacesArray[i].V_index2-1][q];
+					break;
+				}
+			}
+			else
+			{
+				break;
+			}
+		}
+
+		j++;
+		//EdgeList[j].index = j; 
+		EdgeList[j].vert = &VertList[FacesArray[i].V_index3-1];
+		VertList[FacesArray[i].V_index3-1].edge = &EdgeList[j]; 
+		//find pair
+		for (int p = 0; p < 50; p++)
+		{
+			if (isPair[FacesArray[i].V_index1-1][p] == NULL)
+			{
+				isPair[FacesArray[i].V_index1-1][p] = &EdgeList[j];
+				break;
+			}
+		}
+		for (int q = 0; q < 50; q++)
+		{
+			if (isPair[FacesArray[i].V_index3-1][q] != NULL)
+			{
+				if (isPair[FacesArray[i].V_index3-1][q]->vert == &VertList[FacesArray[i].V_index1-1])
+				{
+					isPair[FacesArray[i].V_index3-1][q]->pair = &EdgeList[j];
+					EdgeList[j].pair = isPair[FacesArray[i].V_index3-1][q];
+					break;
+				}
+			}
+			else
+			{
+				break;
+			}
+		}
+		
+		//store next edges of edges
+		EdgeList[j-2].next = &EdgeList[j-1];
+		EdgeList[j-1].next = &EdgeList[j];
+		EdgeList[j].next = &EdgeList[j-2];
+
+		//store prev edges of edges
+		EdgeList[j-2].prev = &EdgeList[j];
+		EdgeList[j-1].prev = &EdgeList[j-2];
+		EdgeList[j].prev = &EdgeList[j-1];
+
+		//j++;
+	}
+	//cout<<j;
+}
+
+myVector CrossPro(myVector vector1, myVector vector2)
+{
+	myVector CP;
+	CP.x = vector1.y * vector2.z - vector1.z * vector2.y;
+	CP.y = vector1.z * vector2.x - vector1.x * vector2.z;
+	CP.z = vector1.x * vector2.y - vector1.y * vector2.x;
+
+	return CP;
+}
+
+float Area(myVector n)
+{
+	float area = sqrt( pow ( n.x, 2 )+ pow( n.y,2 )+ pow( n.z,2 ));
+	return area;
+}
+
+void ComputeVn()
+{
+	for (int i = 0; i<numVertices; i++)
+	{
+		//num of vertices adjacent to init v
+		int num_adj_V = 0;
+		HE_edge* outgoing_he = VertList[i].edge;
+		VertList[i].vn.x = 0;
+		VertList[i].vn.y = 0;
+		VertList[i].vn.z = 0;
+		float area[50];
+		float sum_Area = 0;
+		myVector normal[50];
+		bool Flag_Finish = false;
+		//CW
+		while (!Flag_Finish)
+		{
+			myVector vector1;
+			myVector vector2;
+			//float x1,y1,z1,x2,y2,z2;
+			vector1.x = outgoing_he->next->vert->x - outgoing_he->vert->x;
+			vector1.y = outgoing_he->next->vert->y - outgoing_he->vert->y;
+			vector1.z = outgoing_he->next->vert->z - outgoing_he->vert->z;
+			if(outgoing_he->pair!=0)
+			{
+				outgoing_he = outgoing_he->pair->next;
+				vector2.x = outgoing_he->next->vert->x - outgoing_he->vert->x;
+				vector2.y = outgoing_he->next->vert->y - outgoing_he->vert->y;
+				vector2.z = outgoing_he->next->vert->z - outgoing_he->vert->z;
+
+				myVector CP = CrossPro(vector1,vector2);
+				normal[num_adj_V].x = CP.x;
+				normal[num_adj_V].y = CP.y;
+				normal[num_adj_V].z = CP.z;
+
+				area[num_adj_V] = Area(normal[num_adj_V]);
+
+				sum_Area += area[num_adj_V];
+
+				VertList[i].vn.x += normal[num_adj_V].x * area[num_adj_V];
+				VertList[i].vn.y += normal[num_adj_V].y * area[num_adj_V];
+				VertList[i].vn.z += normal[num_adj_V].z * area[num_adj_V];
+
+				num_adj_V++;
+
+				if (outgoing_he == VertList[i].edge)
+				{
+					Flag_Finish = true;
+				}
+			}
+			else
+				break;
+		} 
+		//CCW
+		outgoing_he = VertList[i].edge;
+		while (!Flag_Finish)
+		{
+			//float x1,y1,z1,x2,y2,z2;
+			myVector vector1;
+			myVector vector2;
+			vector1.x = outgoing_he->next->vert->x - outgoing_he->vert->x;
+			vector1.y = outgoing_he->next->vert->y - outgoing_he->vert->y;
+			vector1.z = outgoing_he->next->vert->z - outgoing_he->vert->z;
+			if(outgoing_he->prev->pair!=0)
+			{
+				outgoing_he = outgoing_he->prev->pair;
+				vector2.x = outgoing_he->next->vert->x - outgoing_he->vert->x;
+				vector2.y = outgoing_he->next->vert->y - outgoing_he->vert->y;
+				vector2.z = outgoing_he->next->vert->z - outgoing_he->vert->z;
+
+				myVector CP = CrossPro(vector1,vector2);
+				normal[num_adj_V].x = CP.x;
+				normal[num_adj_V].y = CP.y;
+				normal[num_adj_V].z = CP.z;
+
+				area[num_adj_V] = Area(normal[num_adj_V]);
+
+				sum_Area += area[num_adj_V];
+				
+				VertList[i].vn.x += normal[num_adj_V].x * area[num_adj_V];
+				VertList[i].vn.y += normal[num_adj_V].y * area[num_adj_V];
+				VertList[i].vn.z += normal[num_adj_V].z * area[num_adj_V];
+
+				num_adj_V++;
+
+				if (outgoing_he == VertList[i].edge)
+				{
+					Flag_Finish = true;
+				}
+			}
+			else
+				break;
+		} 
+
+		VertList[i].vn.x /= sum_Area;
+		VertList[i].vn.y /= sum_Area;
+		VertList[i].vn.z /= sum_Area;
+
+		if (sum_Area==0)
+		{
+			int a = 0;
+		}
+
+		float len;
+		len = Area(VertList[i].vn);
+		VertList[i].vn.x = VertList[i].vn.x / len;
+		VertList[i].vn.y = VertList[i].vn.y / len;
+		VertList[i].vn.z = VertList[i].vn.z / len;
+	}
+
+}
+
+//void chooseModels(int option)
+//{
+//	ReadFile(name[option]);
+//	//open file
+//	/*switch (option)
+//	{
+//	case 1:
+//		ReadFile("testModel/bunny.m");
+//		break;
+//	case 2:
+//		ReadFile("testModel/gargoyle.m");
+//		break;
+//	case 3:
+//		ReadFile("testModel/cap.m");
+//		break;
+//	case 4:
+//		ReadFile("testModel/eight.m");
+//		break;
+//	case 5:
+//		ReadFile("testModel/knot.m");
+//		break;
+//	default:
+//		break;
+//	}*/
+//}
+
+void ResetModelPosition()
+{
+	x_angle = y_angle = x_trans = y_trans = 0;
+	scale_size = 1;
+   
+	Display();
+}
+
+void Keyboard(unsigned char key, int x, int y)    
+{
+   switch (key) 
+   {
+	//reset model
+   case 'r':
+	   ResetModelPosition();
+	   break;
+	  //ESC for exit
+	case 27:                   
+		exit(0);
+		break;
+   }
+}
+
+void Reshape(int w, int h)                   
+{
+	glViewport(0, 0, w, h);
+	width = w;
+	height = h;
+	//perspective projection
+	glMatrixMode(GL_PROJECTION);
+	glLoadIdentity();
+	gluPerspective(50, (GLfloat)w/(GLfloat)h, 1, 1000);
+	}
+
+void Init()
+{
+	glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+
+	//glEnable(GL_DEPTH_TEST);
+
+	glEnable(GL_NORMALIZE);
+  
+	//glEnable(GL_CULL_FACE);
+	glFrontFace(GL_CCW);
+	glCullFace(GL_BACK);
+    
+    // Setup other misc features.
+    glEnable( GL_LIGHTING );
+
+	glEnable(GL_COLOR_MATERIAL); 
+	//glColorMaterial(GL_FRONT_AND_BACK,GL_AMBIENT_AND_DIFFUSE);
+    
+    // Setup lighting 0.
+	GLfloat light0_direction[] = {60.0f, 5.0f, -10.0f, 0.0f};
+	GLfloat light0_model_ambient[] = {1, 0, 0, 1.0f};
+    GLfloat light0_diffuse[] = {0.8f, 0.8f, 0.8f, 1.0f};
+	glLightfv(GL_LIGHT0, GL_POSITION, light0_direction);
+	glLightfv(GL_LIGHT0, GL_AMBIENT, light0_model_ambient);
+	glLightfv(GL_LIGHT0, GL_DIFFUSE, light0_diffuse);
+	glEnable( GL_LIGHT0 );
+
+	//Setup materials
+	GLfloat mat_specular[] = { 0.5, 0.5, 0.5, 0.0 };
+	GLfloat mat_shininess[] = { 50.0 };
+	glMaterialfv(GL_FRONT, GL_SPECULAR, mat_specular);
+	glMaterialfv(GL_FRONT, GL_SHININESS, mat_shininess);
+}
+
+void Display()              
+{
+	glClearColor( 0.5, 0.5, 0.5, 1.0);   
+    Reshape(width,height);
+	glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+
+	// camera transform
+	glMatrixMode(GL_MODELVIEW);
+	glLoadIdentity();
+	gluLookAt(0, 2, 10, 0, 0, 0, 0, 1, 0);
+
+	DrawBasic(Scale.Max_x, Scale.Min_x, Scale.Max_y, Scale.Min_y, Scale.Max_z, Scale.Min_z,Scale.scale);
+
+	// rotate translate and scale the object
+	glTranslatef(x_trans,y_trans,z_trans);
+	glRotatef(x_angle, 0, 1,0); 
+	glRotatef(-y_angle, 1,0,0); 
+	glScalef(scale_size, scale_size, scale_size); 
+
+	//DrawBasic(Scale.Max_x, Scale.Min_x, Scale.Max_y, Scale.Min_y, Scale.Max_z, Scale.Min_z,Scale.scale);
+
+	DrawObject();
+
+	glutSwapBuffers();    
+}
+
+void SampleListener::onFrame(const Controller& controller) 
+{
+	// Get the most recent frame and report some basic information
+	const Frame frame = controller.frame();
+
+	HandList hands = frame.hands();
+	if(!isReading)
+	{
+		if(hands.count() == 1)
+		{
+			Leap::GestureList gesture = frame.gestures();
+			if(gesture[0].type() == Leap::Gesture::TYPE_CIRCLE)
+			{
+				option++;
+				if (option > 1)
+				{
+					option = 0;
+				}
+				isReading = true;
+				
+				ReadFile(name[option]);
+			}
+		}
+		//two hand together control rotation
+		if(hands.count() == 2)
+		{
+			const Hand hand1 = hands.leftmost();
+			const Hand hand2 = hands.rightmost();
+			//left hand controls tranlation
+			if (hand1.grabAngle()<1.0f && hand2.grabAngle()>3.0f)
+			{
+				x_trans += hand1.palmVelocity().x * deltaT;
+				y_trans += hand1.palmVelocity().y * deltaT;
+				z_trans += hand1.palmVelocity().z * deltaT;
+			}
+			//right hand controls rotation
+			if (hand1.grabAngle()>3.0f && hand2.grabAngle()<1.0f)
+			{
+				x_angle += hand2.palmVelocity().x * deltaT * 5;
+				y_angle += hand2.palmVelocity().y * deltaT * 5;
+			}
+			//two hands together control scaling
+			if (hand1.grabAngle()<1.0f && hand2.grabAngle()<1.0f)
+			{
+				Vector vec = hand2.palmPosition() - hand1.palmPosition();
+				scale_size = sqrt(pow(vec.x,2) + pow(vec.y,2) + pow(vec.z,2)) * 0.01;
+			}
+		
+		}
+	}
+	glFlush();
+}
+
+void myIdle(void)
+{
+	if(!isReading)
+	{
+		glutPostRedisplay();
+	}
+    
+}
+
+int main(int argc, char** argv)
+{
+	glutInit(&argc, argv);          
+	glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB);        
+	glutInitWindowSize(1000, 600);              
+	glutInitWindowPosition(100, 100);        
+	glutCreateWindow("Novel Interface for 3D Mesh Viewer   G1502712L Guo Wanghui");       
+	glEnable(GL_DEPTH_TEST);
+
+	Init();
+
+	ReadFile("testModel/bunny.m");
+
+	glutReshapeFunc(Reshape);
+	glutDisplayFunc(Display); 
+	glutKeyboardFunc(Keyboard);
+	//glutMouseFunc(myGlutMouse);
+	//glutMotionFunc(myGlutMotion);        
+	glutIdleFunc(myIdle);
+
+	//creatGlutMenu();
+	// Create a sample listener and controller
+	SampleListener listener;
+	Controller controller;
+
+	// Have the sample listener receive events from the controller
+	controller.addListener(listener);
+	//controller.enableGesture(Leap::Gesture::TYPE_SWIPE);
+	controller.enableGesture(Leap::Gesture::TYPE_CIRCLE);
+	
+	// Remove the sample listener when done
+	//controller.removeListener(listener);
+	glutMainLoop();            
+
+    return 0; 
+}
+
+#include <Leap.h>
+
+using namespace Leap;
+
+class SampleListener : public Listener 
+{
+public:
+	virtual void onInit(const Controller&);
+	virtual void onConnect(const Controller&);
+	virtual void onDisconnect(const Controller&);
+	virtual void onExit(const Controller&);
+	virtual void onFrame(const Controller&);
+	virtual void onFocusGained(const Controller&);
+	virtual void onFocusLost(const Controller&);
+	virtual void onDeviceChange(const Controller&);
+	virtual void onServiceConnect(const Controller&);
+	virtual void onServiceDisconnect(const Controller&);
+	virtual void onServiceChange(const Controller&);
+    virtual void onDeviceFailure(const Controller&);
+    virtual void onLogMessage(const Controller&, MessageSeverity severity, int64_t timestamp, const char* msg);
+};
+
+const std::string fingerNames[] = {"Thumb", "Index", "Middle", "Ring", "Pinky"};
+//const std::string boneNames[] = {"Metacarpal", "Proximal", "Middle", "Distal"};
