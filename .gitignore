@@ -1,7 +1,5 @@
 #include "LeapMotion.h"
 
-//using namespace Leap;
-
 void SampleListener::onInit(const Controller& controller) {
   std::cout << "Initialized" << std::endl;
 }
@@ -197,7 +195,6 @@ int option = 0;
 #include <glui.h>
 #include <fstream>
 #include <iostream>
-//#include <Leap.h>
 #include "Model.h"
 #include "LeapMotion.h"
 
@@ -318,7 +315,7 @@ void ReadFile(string filename)
 	isPair = new HE_edge**[numVertices];
 	for (int i= 0; i<numVertices;i++)
 	{
-		isPair[i] = new HE_edge*[50];  //assume the edges connect to one point is not more than 20
+		isPair[i] = new HE_edge*[50]; 
 	}
 	for (int i= 0; i<numVertices;i++)
 	{
@@ -340,7 +337,7 @@ float getScale()
 	Scale.Max_y = Scale.Min_y = VertList[0].y;
 	Scale.Max_z = Scale.Min_z = VertList[0].z;
 	//Scale.Max_x = 0;
-	// get Max_x Max_y Max_z
+	//get Max_x Max_y Max_z
 	for (int i = 0; i < numVertices; i++)
 	{
 		if( VertList[i].x > Scale.Max_x )
@@ -944,4 +941,3 @@ public:
 };
 
 const std::string fingerNames[] = {"Thumb", "Index", "Middle", "Ring", "Pinky"};
-//const std::string boneNames[] = {"Metacarpal", "Proximal", "Middle", "Distal"};
